@@ -49,8 +49,8 @@ exports.handler = async function(event) {
       payment_method_types: ['card'],
       line_items: line_items,
       mode: 'payment',
-      success_url: 'https://kryptaa.com/checkout.html?success=true',
-      cancel_url: 'https://kryptaa.com/checkout.html',
+      success_url: 'https://www.kryptaa.com/checkout.html?success=true',
+      cancel_url: 'https://www.kryptaa.com/checkout.html',
       shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU', 'IN'] },
       phone_number_collection: { enabled: true },
     });
