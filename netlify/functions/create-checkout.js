@@ -23,12 +23,16 @@ exports.handler = async function (event) {
     }, 0);
 
     const line_items = cart.map(function (item) {
+      const imgUrl = item.img
+        ? (item.img.startsWith('http') ? item.img : 'https://www.kryptaa.com/' + item.img.replace(/^\//, ''))
+        : null;
       return {
         price_data: {
           currency: 'usd',
           product_data: {
             name: item.name + ' — Size: ' + (item.size || 'N/A'),
             description: item.collection || undefined,
+            images: imgUrl ? [imgUrl] : [],
           },
           unit_amount: Math.round((item.price || 0) * 100),
         },
