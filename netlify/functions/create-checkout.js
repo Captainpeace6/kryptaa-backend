@@ -80,10 +80,15 @@ exports.handler = async function (event) {
           },
         ];
 
+    const cartMeta = JSON.stringify(
+      cart.map(function (i) { return { id: i.id, size: i.size, qty: i.qty || 1 }; })
+    );
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items,
       mode: 'payment',
+      metadata: { cart: cartMeta },
       shipping_options,
       shipping_address_collection: {
         allowed_countries: ['US', 'CA', 'GB', 'AU', 'IN', 'AE', 'SG', 'DE', 'FR', 'NL'],

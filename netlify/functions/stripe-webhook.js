@@ -1,0 +1,88 @@
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { getStore } = require('@netlify/blobs');
+
+const BASE_STOCK = {
+  10:  { S: 5,  M: 10, L: 10, XL: 5  },
+  11:  { S: 5,  M: 10, L: 10, XL: 5  },
+  12:  { S: 5,  M: 10, L: 10, XL: 5  },
+  14:  { S: 5,  M: 10, L: 10, XL: 5  },
+  30:  { S: 5,  M: 10, L: 10, XL: 5  },
+  31:  { S: 5,  M: 8,  L: 11, XL: 6  },
+  32:  { S: 5,  M: 10, L: 10, XL: 5  },
+  500: { XS: 9,  S: 12, M: 12, L: 12, XL: 0 },
+  501: { XS: 9,  S: 15, M: 13, L: 11, XL: 0 },
+  502: { XS: 7,  S: 12, M: 12, L: 11, XL: 0 },
+  503: { XS: 12, S: 12, M: 9,  L: 7,  XL: 0 },
+};
+
+exports.handler = async function (event) {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
+  }
+
+  const sig = event.headers['stripe-signature'];
+  if (!sig) {
+    return { statusCode: 400, body: 'Missing stripe-signature header' };
+  }
+
+  let stripeEvent;
+  try {
+    stripeEvent = stripe.webhooks.constructEvent(
+      event.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error('Webhook signature failed:', err.message);
+    return { statusCode: 400, body: 'Webhook Error: ' + err.message };
+  }
+
+  if (stripeEvent.type !== 'checkout.session.completed') {
+    return { statusCode: 200, body: 'Ignored' };
+  }
+
+  const session = stripeEvent.data.object;
+  const cartJson = session.metadata && session.metadata.cart;
+
+  if (!cartJson) {
+    console.log('No cart metadata in session', session.id);
+    return { statusCode: 200, body: 'No cart metadata — stock not updated' };
+  }
+
+  let cartItems;
+  try {
+    cartItems = JSON.parse(cartJson);
+  } catch (e) {
+    console.error('Invalid cart metadata:', cartJson);
+    return { statusCode: 200, body: 'Invalid cart metadata' };
+  }
+
+  const store = getStore('kryptaa-stock');
+
+  let stock;
+  try {
+    const raw = await store.get('stock');
+    stock = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(BASE_STOCK));
+  } catch (e) {
+    stock = JSON.parse(JSON.stringify(BASE_STOCK));
+  }
+
+  for (const item of cartItems) {
+    const id = String(item.id);
+    const size = item.size;
+    const qty = item.qty || 1;
+    if (stock[id] && stock[id][size] !== undefined) {
+      stock[id][size] = Math.max(0, (stock[id][size] || 0) - qty);
+    }
+  }
+
+  try {
+    await store.set('stock', JSON.stringify(stock));
+    console.log('Stock deducted for session', session.id, JSON.stringify(cartItems));
+  } catch (e) {
+    console.error('Failed to save stock:', e.message);
+    return { statusCode: 500, body: 'Failed to update stock' };
+  }
+
+  return { statusCode: 200, body: 'OK' };
+};
