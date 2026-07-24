@@ -132,6 +132,10 @@ exports.handler = async function (event) {
         mailErr,
         hasUser: !!process.env.GMAIL_USER,
         hasPass: !!process.env.GMAIL_APP_PASSWORD,
+        envKeys: Object.keys(process.env).filter((k) =>
+          /SITE|NETLIFY|BLOB|DEPLOY|URL/i.test(k)
+        ),
+        siteIdPresent: !!(process.env.SITE_ID || process.env.NETLIFY_SITE_ID),
       }),
     };
   }
