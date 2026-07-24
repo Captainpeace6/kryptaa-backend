@@ -7,6 +7,14 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+/* Netlify does not inject the Blobs context on this site, so pass siteID/token
+   explicitly when they are available. Falls back to the automatic context. */
+function blobStore(name) {
+  const siteID = process.env.SITE_ID || process.env.NETLIFY_SITE_ID;
+  const token = process.env.NETLIFY_API_TOKEN || process.env.NETLIFY_BLOBS_TOKEN;
+  return siteID && token ? getStore({ name, siteID, token }) : getStore(name);
+}
+
 exports.handler = async function (event) {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS_HEADERS, body: '' };
@@ -58,7 +66,7 @@ exports.handler = async function (event) {
   let stored = false;
   let blobErr = null;
   try {
-    const store = getStore('kryptaa-reviews');
+    const store = blobStore('kryptaa-reviews');
     const key = Date.now() + '-' + product.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
     await store.set(key, JSON.stringify({ ...record, photos }));
     stored = true;
@@ -128,14 +136,16 @@ exports.handler = async function (event) {
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         error: 'Could not save review',
-        blobErr,
-        mailErr,
-        hasUser: !!process.env.GMAIL_USER,
-        hasPass: !!process.env.GMAIL_APP_PASSWORD,
-        envKeys: Object.keys(process.env).filter((k) =>
-          /SITE|NETLIFY|BLOB|DEPLOY|URL/i.test(k)
-        ),
-        siteIdPresent: !!(process.env.SITE_ID || process.env.NETLIFY_SITE_ID),
+        /* Non-sensitive reason codes so misconfiguration is diagnosable
+           without exposing credentials. */
+        reason: {
+          storage: blobErr ? 'blobs-unavailable' : null,
+          email: mailErr
+            ? (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD
+                ? 'smtp-error'
+                : 'smtp-not-configured')
+            : null,
+        },
       }),
     };
   }

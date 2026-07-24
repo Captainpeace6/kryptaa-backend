@@ -1,5 +1,13 @@
 const { getStore } = require('@netlify/blobs');
 
+/* Netlify does not inject the Blobs context on this site, so pass siteID/token
+   explicitly when they are available. Falls back to the automatic context. */
+function blobStore(name) {
+  const siteID = process.env.SITE_ID || process.env.NETLIFY_SITE_ID;
+  const token = process.env.NETLIFY_API_TOKEN || process.env.NETLIFY_BLOBS_TOKEN;
+  return siteID && token ? getStore({ name, siteID, token }) : getStore(name);
+}
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -26,7 +34,7 @@ exports.handler = async function (event) {
   }
 
   try {
-    const store = getStore('kryptaa-stock');
+    const store = blobStore('kryptaa-stock');
     const raw = await store.get('stock');
     const stock = raw ? JSON.parse(raw) : BASE_STOCK;
     return {

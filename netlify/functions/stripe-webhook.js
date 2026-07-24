@@ -1,6 +1,14 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { getStore } = require('@netlify/blobs');
 
+/* Netlify does not inject the Blobs context on this site, so pass siteID/token
+   explicitly when they are available. Falls back to the automatic context. */
+function blobStore(name) {
+  const siteID = process.env.SITE_ID || process.env.NETLIFY_SITE_ID;
+  const token = process.env.NETLIFY_API_TOKEN || process.env.NETLIFY_BLOBS_TOKEN;
+  return siteID && token ? getStore({ name, siteID, token }) : getStore(name);
+}
+
 const BASE_STOCK = {
   10:  { S: 5,  M: 10, L: 10, XL: 5  },
   11:  { S: 5,  M: 10, L: 10, XL: 5  },
@@ -57,7 +65,7 @@ exports.handler = async function (event) {
     return { statusCode: 200, body: 'Invalid cart metadata' };
   }
 
-  const store = getStore('kryptaa-stock');
+  const store = blobStore('kryptaa-stock');
 
   let stock;
   try {
