@@ -56,12 +56,14 @@ exports.handler = async function (event) {
   };
 
   let stored = false;
+  let blobErr = null;
   try {
     const store = getStore('kryptaa-reviews');
     const key = Date.now() + '-' + product.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
     await store.set(key, JSON.stringify({ ...record, photos }));
     stored = true;
   } catch (err) {
+    blobErr = err.message;
     console.error('Review blob write error:', err.message);
   }
 
@@ -98,6 +100,7 @@ exports.handler = async function (event) {
 </html>`;
 
   let mailed = false;
+  let mailErr = null;
   try {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
@@ -115,6 +118,7 @@ exports.handler = async function (event) {
     });
     mailed = true;
   } catch (err) {
+    mailErr = err.message;
     console.error('Review email error:', err.message);
   }
 
@@ -122,7 +126,13 @@ exports.handler = async function (event) {
     return {
       statusCode: 500,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Could not save review' }),
+      body: JSON.stringify({
+        error: 'Could not save review',
+        blobErr,
+        mailErr,
+        hasUser: !!process.env.GMAIL_USER,
+        hasPass: !!process.env.GMAIL_APP_PASSWORD,
+      }),
     };
   }
 
