@@ -30,7 +30,7 @@ const CATALOG = {
     variants: {
       set:   { name: "Silver Metallic Crop Set", price: 27 },
       top:   { name: "Silver Metallic Crop Top", price: 14 },
-      skirt: { name: "Silver Metallic Crop Skirt", price: 14 },
+      skirt: { name: "Silver Metallic Mini Chainmail Skirt", price: 14 },
     },
   },
   108: { name: "Six Eyes Gojo Satoru Denim", price: 69 },
