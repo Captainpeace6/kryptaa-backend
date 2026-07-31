@@ -26,6 +26,9 @@ const BASE_STOCK = {
   501: { XS: 9,  S: 15, M: 13, L: 11, XL: 0 },
   502: { XS: 7,  S: 12, M: 12, L: 11, XL: 0 },
   503: { XS: 12, S: 12, M: 9,  L: 7,  XL: 0 },
+  // Silver Metallic Crop Set (id 90) — Top & Skirt tracked separately (Universal size)
+  '90:top':   { Universal: 12 },
+  '90:skirt': { Universal: 12 },
 };
 
 exports.handler = async function (event) {

@@ -21,7 +21,21 @@ const BASE_STOCK = {
   501: { XS: 9,  S: 15, M: 13, L: 11, XL: 0 },
   502: { XS: 7,  S: 12, M: 12, L: 11, XL: 0 },
   503: { XS: 12, S: 12, M: 9,  L: 7,  XL: 0 },
+  // Silver Metallic Crop Set (id 90) — Top & Skirt tracked separately (Universal size)
+  '90:top':   { Universal: 12 },
+  '90:skirt': { Universal: 12 },
 };
+
+/* Which stock keys a cart line draws down. The Silver Set (id 90) splits into
+   Top and Skirt: a Full Set (or unspecified variant) deducts BOTH pieces. */
+function stockKeysFor(item) {
+  if (String(item.id) === '90') {
+    if (item.variant === 'top') return ['90:top'];
+    if (item.variant === 'skirt') return ['90:skirt'];
+    return ['90:top', '90:skirt']; // full set (or legacy items with no variant)
+  }
+  return [String(item.id)];
+}
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
@@ -76,11 +90,12 @@ exports.handler = async function (event) {
   }
 
   for (const item of cartItems) {
-    const id = String(item.id);
     const size = item.size;
     const qty = item.qty || 1;
-    if (stock[id] && stock[id][size] !== undefined) {
-      stock[id][size] = Math.max(0, (stock[id][size] || 0) - qty);
+    for (const id of stockKeysFor(item)) {
+      if (stock[id] && stock[id][size] !== undefined) {
+        stock[id][size] = Math.max(0, (stock[id][size] || 0) - qty);
+      }
     }
   }
 
