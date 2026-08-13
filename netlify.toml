@@ -1,6 +1,10 @@
 [build]
   functions = "netlify/functions"
 
+# Post-purchase review requests — runs once a day, emails orders that are 5+ days old
+[functions."send-review-requests"]
+  schedule = "@daily"
+
 [[headers]]
   for = "/api/*"
   [headers.values]

@@ -1,5 +1,6 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { getStore } = require('@netlify/blobs');
+const { resolveLine } = require('./catalog');
 
 /* Netlify does not inject the Blobs context on this site, so pass siteID/token
    explicitly when they are available. Falls back to the automatic context. */
@@ -105,6 +106,26 @@ exports.handler = async function (event) {
   } catch (e) {
     console.error('Failed to save stock:', e.message);
     return { statusCode: 500, body: 'Failed to update stock' };
+  }
+
+  /* Queue a post-purchase review request — sent ~5 days later by the
+     send-review-requests scheduled function. Never blocks the webhook. */
+  try {
+    const email = session.customer_details && session.customer_details.email;
+    if (email) {
+      const first = cartItems[0] || {};
+      const resolved = resolveLine(first.id, first.variant);
+      const q = blobStore('kryptaa-review-queue');
+      await q.set(session.id, JSON.stringify({
+        email,
+        name: (session.customer_details && session.customer_details.name) || '',
+        product: resolved ? resolved.name : 'your KRYPTAA order',
+        orderedAt: session.created ? session.created * 1000 : Date.now(),
+        sent: false,
+      }));
+    }
+  } catch (e) {
+    console.error('Review-queue enqueue failed:', e.message);
   }
 
   return { statusCode: 200, body: 'OK' };
