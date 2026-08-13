@@ -137,7 +137,7 @@ exports.handler = async function (event) {
         allowed_countries: ['US', 'CA', 'GB', 'AU', 'IN', 'AE', 'SG', 'DE', 'FR', 'NL'],
       },
       phone_number_collection: { enabled: true },
-      success_url: 'https://www.kryptaa.com/checkout.html?success=true',
+      success_url: 'https://www.kryptaa.com/checkout.html?success=true&session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'https://www.kryptaa.com/checkout.html',
     });
 
