@@ -50,6 +50,7 @@ const CATALOG = {
 
 /* Server-side coupon table — the client only sends the code, never the rate. */
 const COUPONS = {
+  KRYPTAA13: { percentOff: 13 },
   KRYPTAA10: { percentOff: 10 },
 };
 
