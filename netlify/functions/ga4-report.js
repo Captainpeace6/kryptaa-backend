@@ -95,12 +95,58 @@ exports.handler = async function (event) {
       });
     } catch (e) { /* funnel optional; leave zeros */ }
 
+    // Channel attribution (sessions/users/revenue by default channel group) — for Marketing Attribution
+    let channels = [];
+    try {
+      const [cr] = await client.runReport({
+        property,
+        dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+        metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'conversions' }, { name: 'totalRevenue' }],
+        orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+        limit: 15,
+      });
+      channels = (cr.rows || []).map((r) => ({
+        channel: r.dimensionValues[0].value,
+        sessions: parseFloat(r.metricValues[0].value) || 0,
+        users: parseFloat(r.metricValues[1].value) || 0,
+        conversions: parseFloat(r.metricValues[2].value) || 0,
+        revenue: parseFloat(r.metricValues[3].value) || 0,
+      }));
+    } catch (e) { /* channels optional */ }
+
+    // Per-page metrics (sessions, views, bounce, avg engagement) — for Landing Page Performance
+    let pages = [];
+    try {
+      const [pr] = await client.runReport({
+        property,
+        dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [{ name: 'pagePath' }],
+        metrics: [{ name: 'sessions' }, { name: 'screenPageViews' }, { name: 'bounceRate' }, { name: 'userEngagementDuration' }],
+        orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+        limit: 15,
+      });
+      pages = (pr.rows || []).map((r) => {
+        const s = parseFloat(r.metricValues[0].value) || 0;
+        const eng = parseFloat(r.metricValues[3].value) || 0;
+        return {
+          path: r.dimensionValues[0].value,
+          sessions: s,
+          views: parseFloat(r.metricValues[1].value) || 0,
+          bounceRate: parseFloat(r.metricValues[2].value) || 0,
+          avgEngagementSec: s ? eng / s : 0,
+        };
+      });
+    } catch (e) { /* pages optional */ }
+
     return json(200, {
       configured: true,
       rangeDays,
       sessions, users, pageViews, engagedSessions,
       avgEngagementSec, bounceRate, conversions, revenue, convRate,
       funnel,
+      channels,
+      pages,
       updatedAt: Date.now(),
     });
   } catch (e) {
