@@ -164,6 +164,22 @@ exports.handler = async function (event) {
       }));
     } catch (e) { /* items optional */ }
 
+    // Audience — device / country / new-vs-returning (for Marketing Intelligence)
+    const audience = { devices: [], countries: [], newVsReturning: [] };
+    async function dim(dimName, metricName, limit) {
+      try {
+        const [rr] = await client.runReport({
+          property, dateRanges: [{ startDate, endDate: 'today' }],
+          dimensions: [{ name: dimName }], metrics: [{ name: metricName }],
+          orderBys: [{ metric: { metricName }, desc: true }], limit: limit || 10,
+        });
+        return (rr.rows || []).map((r) => ({ key: r.dimensionValues[0].value, value: parseFloat(r.metricValues[0].value) || 0 }));
+      } catch (e) { return []; }
+    }
+    audience.devices = await dim('deviceCategory', 'sessions', 5);
+    audience.countries = await dim('country', 'sessions', 8);
+    audience.newVsReturning = await dim('newVsReturning', 'totalUsers', 3);
+
     return json(200, {
       configured: true,
       rangeDays,
@@ -173,6 +189,7 @@ exports.handler = async function (event) {
       channels,
       pages,
       items,
+      audience,
       updatedAt: Date.now(),
     });
   } catch (e) {
