@@ -139,6 +139,31 @@ exports.handler = async function (event) {
       });
     } catch (e) { /* pages optional */ }
 
+    // Per-product (item-scoped) metrics — for Product Intelligence
+    let items = [];
+    try {
+      const [ir] = await client.runReport({
+        property,
+        dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [{ name: 'itemName' }],
+        metrics: [
+          { name: 'itemsViewed' },
+          { name: 'itemsAddedToCart' },
+          { name: 'itemsPurchased' },
+          { name: 'itemRevenue' },
+        ],
+        orderBys: [{ metric: { metricName: 'itemsViewed' }, desc: true }],
+        limit: 100,
+      });
+      items = (ir.rows || []).map((r) => ({
+        name: r.dimensionValues[0].value,
+        views: parseFloat(r.metricValues[0].value) || 0,
+        addToCart: parseFloat(r.metricValues[1].value) || 0,
+        purchased: parseFloat(r.metricValues[2].value) || 0,
+        revenue: parseFloat(r.metricValues[3].value) || 0,
+      }));
+    } catch (e) { /* items optional */ }
+
     return json(200, {
       configured: true,
       rangeDays,
@@ -147,6 +172,7 @@ exports.handler = async function (event) {
       funnel,
       channels,
       pages,
+      items,
       updatedAt: Date.now(),
     });
   } catch (e) {
