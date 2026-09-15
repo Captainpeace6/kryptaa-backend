@@ -89,7 +89,7 @@ exports.handler = async function (event) {
       // Unknown codes are silently ignored (no discount) rather than failing checkout.
     }
 
-    const shipping_options = subtotal >= 75
+    const shipping_options = subtotal >= 60
       ? [{
           shipping_rate_data: {
             type: 'fixed_amount',
