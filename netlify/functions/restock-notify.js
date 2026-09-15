@@ -1,7 +1,7 @@
 /* Admin: back-in-stock waitlist.
    GET  →  { counts: { "110": 3, ... } }        (unsent waiters per product)
    POST { id }  →  { productId, sent, failed, skipped }  (email waiters now) */
-const { notifyProduct, waitlistCounts } = require('./restock-lib');
+const { notifyProduct, waitlistCounts, blobStore } = require('./restock-lib');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -18,8 +18,15 @@ exports.handler = async function (event) {
   try {
     if (event.httpMethod === 'GET') return json(200, { counts: await waitlistCounts() });
     if (event.httpMethod === 'POST') {
-      const { id } = JSON.parse(event.body || '{}');
+      const { id, remove } = JSON.parse(event.body || '{}');
       if (!id) return json(400, { error: 'id required' });
+      /* { id, remove: "<email>" } — drop one waiter (tests / unsubscribe requests) */
+      if (remove) {
+        const crypto = require('crypto');
+        const key = 'p' + String(id) + '_' + crypto.createHash('sha256').update(String(remove).trim().toLowerCase()).digest('hex');
+        await blobStore('kryptaa-restock').delete(key);
+        return json(200, { ok: true, removed: key });
+      }
       return json(200, await notifyProduct(String(id)));
     }
     return json(405, { error: 'Method Not Allowed' });
