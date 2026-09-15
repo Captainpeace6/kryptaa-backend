@@ -1,7 +1,7 @@
 /* ─────────────────────────────────────────────────────────────
    KRYPTAA — Back-in-stock waitlist (shared logic)
 
-   Store "kryptaa-restock": key `${productId}:${sha256(email)}` →
+   Store "kryptaa-restock": key `p${productId}_${sha256(email)}` →
    { email, productId, product, at, sent }.
    - restock-request.js  (public)  adds a waiter
    - restock-notify.js   (admin)   emails waiters for a product on demand
@@ -45,7 +45,7 @@ function emailHtml(product, id) {
 
 async function addWaiter({ email, productId, product }) {
   const store = blobStore('kryptaa-restock');
-  const key = String(productId) + ':' + sha256(email);
+  const key = 'p' + String(productId) + '_' + sha256(email);
   await store.set(key, JSON.stringify({ email, productId: String(productId), product, at: Date.now(), sent: false }));
   return key;
 }
@@ -57,7 +57,7 @@ async function notifyProduct(productId) {
   let store, listing;
   try {
     store = blobStore('kryptaa-restock');
-    listing = await store.list({ prefix: String(productId) + ':' });
+    listing = await store.list({ prefix: 'p' + String(productId) + '_' });
   } catch (e) { summary.error = e.message; return summary; }
   const keys = (listing && listing.blobs) ? listing.blobs.map((b) => b.key) : [];
   if (!keys.length) return summary;
