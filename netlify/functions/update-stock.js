@@ -1,3 +1,4 @@
+const { notifyProduct } = require('./restock-lib');
 const { getStore } = require('@netlify/blobs');
 
 /* Netlify does not inject the Blobs context on this site, so pass siteID/token
@@ -49,12 +50,30 @@ exports.handler = async function (event) {
     });
 
     const store = blobStore('kryptaa-stock');
+
+    /* Snapshot previous stock so we can detect products coming back (0 → >0) */
+    let previous = {};
+    try { const raw = await store.get('stock'); previous = raw ? JSON.parse(raw) : {}; } catch (e) {}
+
     await store.set('stock', JSON.stringify(cleaned));
+
+    /* Back-in-stock: for any product that was fully sold out and now has
+       units, email its waitlist. Never fails the save. */
+    const total = (o) => o && typeof o === 'object' ? Object.values(o).reduce((s, n) => s + (Number(n) || 0), 0) : 0;
+    const restocked = [];
+    for (const id of Object.keys(cleaned)) {
+      const base = String(id).split(':')[0]; // "90:top" → "90"
+      if (total(previous[id]) === 0 && total(cleaned[id]) > 0 && !restocked.includes(base)) restocked.push(base);
+    }
+    const notified = [];
+    for (const id of restocked) {
+      try { notified.push(await notifyProduct(id)); } catch (e) { console.error('restock notify failed', id, e.message); }
+    }
 
     return {
       statusCode: 200,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true }),
+      body: JSON.stringify({ ok: true, restocked, notified }),
     };
   } catch (err) {
     console.error('update-stock error:', err.message);

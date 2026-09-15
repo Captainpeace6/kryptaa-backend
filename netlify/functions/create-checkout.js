@@ -139,6 +139,11 @@ exports.handler = async function (event) {
       phone_number_collection: { enabled: true },
       success_url: 'https://www.kryptaa.com/checkout.html?success=true&session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'https://www.kryptaa.com/checkout.html',
+      /* Abandoned-cart recovery: expire after 1h (Stripe min is 30m). On
+         checkout.session.expired the webhook emails the shopper a recovery
+         link that reopens this exact cart (with KRYPTAA12 pre-applied). */
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
+      after_expiration: { recovery: { enabled: true, allow_promotion_codes: true } },
     });
 
     return json(200, { url: session.url });

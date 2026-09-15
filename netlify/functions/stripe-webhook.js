@@ -101,6 +101,85 @@ async function sendOrderConfirmation(session, cartItems) {
   });
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Abandoned-cart recovery.
+   Stripe fires checkout.session.expired ~1h after create-checkout (see
+   expires_at there). If the shopper typed their email on the Stripe page
+   before leaving, the session carries it plus a recovery URL that reopens
+   the same cart. We email once per session, skip anyone who bought in the
+   last 48h, and make sure a reusable KRYPTAA12 promotion code exists in
+   Stripe so it can be applied on the recovered session.
+   ───────────────────────────────────────────────────────────── */
+const RECOVERY_CODE = 'KRYPTAA12';
+
+async function ensurePromotionCode() {
+  try {
+    const existing = await stripe.promotionCodes.list({ code: RECOVERY_CODE, limit: 1 });
+    if (existing.data.length) return existing.data[0];
+    const coupon = await stripe.coupons.create({
+      percent_off: 12, duration: 'forever', name: RECOVERY_CODE + ' (recovery)',
+    });
+    return await stripe.promotionCodes.create({ coupon: coupon.id, code: RECOVERY_CODE });
+  } catch (e) {
+    console.error('ensurePromotionCode failed:', e.message);
+    return null;
+  }
+}
+
+function recoveryEmailHtml(first, items, url) {
+  const rows = items.map((it) => {
+    const r = resolveLine(it.id, it.variant);
+    return `<li style="margin:0 0 6px;font-size:14px;color:#f0ede8;">${esc(r ? r.name : 'Item ' + it.id)} <span style="color:rgba(240,237,232,0.5);">· Size ${esc(it.size || 'N/A')} · Qty ${it.qty || 1}</span></li>`;
+  }).join('');
+  return `
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0c0b09;font-family:Georgia,'Times New Roman',serif;color:#f0ede8;">
+  <div style="max-width:560px;margin:32px auto;background:#111009;border:1px solid rgba(210,174,91,0.25);padding:36px;">
+    <p style="margin:0 0 6px;font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:rgba(210,174,91,0.7);">KRYPTAA</p>
+    <h1 style="margin:0 0 14px;font-size:24px;color:#d2ae5b;letter-spacing:0.06em;">Still yours, ${esc(first)}.</h1>
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.7;color:rgba(240,237,232,0.86);">You left these in your bag. We held them — but limited drops don't wait long.</p>
+    <ul style="margin:0 0 22px;padding-left:18px;">${rows}</ul>
+    <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:rgba(240,237,232,0.86);">Use <strong style="color:#d2ae5b;letter-spacing:0.12em;">${RECOVERY_CODE}</strong> at checkout for <strong>12% off</strong>.</p>
+    <a href="${url}" style="display:inline-block;background:#d2ae5b;color:#060606;text-decoration:none;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;padding:14px 28px;">Return to my bag</a>
+    <p style="margin:28px 0 0;font-size:11px;line-height:1.6;color:rgba(240,237,232,0.4);">Statement without noise.<br>One-time reminder — we won't email you about this cart again.</p>
+  </div>
+</body></html>`;
+}
+
+async function handleAbandonedCart(session) {
+  const email = session.customer_details && session.customer_details.email;
+  const url = session.after_expiration && session.after_expiration.recovery && session.after_expiration.recovery.url;
+  if (!email || !url) { console.log('expired session without email/recovery url', session.id); return; }
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
+
+  const store = blobStore('kryptaa-cart-recovery');
+  // Once per session
+  try { if (await store.get('sent:' + session.id)) return; } catch (e) {}
+  // Skip recent buyers (48h)
+  try {
+    const b = await store.get('bought:' + sha256(email));
+    if (b && Date.now() - Number(b) < 48 * 3600 * 1000) { console.log('skip recovery — recent buyer', session.id); return; }
+  } catch (e) {}
+
+  let items = [];
+  try { items = JSON.parse((session.metadata && session.metadata.cart) || '[]'); } catch (e) {}
+
+  await ensurePromotionCode();
+  const first = ((session.customer_details && session.customer_details.name) || '').split(' ')[0] || 'there';
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+  });
+  await transporter.sendMail({
+    from: `KRYPTAA <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: 'You left something in your bag — 12% off to finish',
+    html: recoveryEmailHtml(first, items, url),
+  });
+  await store.set('sent:' + session.id, String(Date.now()));
+  console.log('Recovery email sent for', session.id);
+}
+
 /* Netlify does not inject the Blobs context on this site, so pass siteID/token
    explicitly when they are available. Falls back to the automatic context. */
 function blobStore(name) {
@@ -159,11 +238,28 @@ exports.handler = async function (event) {
     return { statusCode: 400, body: 'Webhook Error: ' + err.message };
   }
 
+  /* ── Abandoned cart: session expired without payment ── */
+  if (stripeEvent.type === 'checkout.session.expired') {
+    try {
+      await handleAbandonedCart(stripeEvent.data.object);
+    } catch (e) {
+      console.error('Abandoned-cart handling failed:', e.message);
+    }
+    return { statusCode: 200, body: 'OK (expired)' };
+  }
+
   if (stripeEvent.type !== 'checkout.session.completed') {
     return { statusCode: 200, body: 'Ignored' };
   }
 
   const session = stripeEvent.data.object;
+
+  /* Remember this buyer so a later expired session for the same email
+     doesn't trigger a "you left something" nudge after they already bought. */
+  try {
+    const em = session.customer_details && session.customer_details.email;
+    if (em) await blobStore('kryptaa-cart-recovery').set('bought:' + sha256(em), String(Date.now()));
+  } catch (e) {}
   const cartJson = session.metadata && session.metadata.cart;
 
   if (!cartJson) {
