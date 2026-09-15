@@ -11,3 +11,7 @@
     Access-Control-Allow-Origin = "https://kryptaa.com"
     Access-Control-Allow-Methods = "POST, OPTIONS"
     Access-Control-Allow-Headers = "Content-Type"
+
+# Daily business pulse email — 12:00 UTC = 08:00 America/New_York
+[functions."daily-pulse"]
+  schedule = "0 12 * * *"
