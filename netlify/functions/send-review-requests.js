@@ -33,14 +33,19 @@ function emailHtml(name, product) {
     <p style="margin:0 0 6px;font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:rgba(210,174,91,0.7);">KRYPTAA</p>
     <h1 style="margin:0 0 20px;font-size:22px;color:#d2ae5b;letter-spacing:0.04em;">How's your fit, ${hi}?</h1>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:rgba(240,237,232,0.86);">
-      Hope you're loving your <strong style="color:#f0ede8;">${esc(product)}</strong>. Your words help the underground find us — would you drop a quick review? Photos welcome, and always appreciated. 🖤
+      Hope you're loving your <strong style="color:#f0ede8;">${esc(product)}</strong>. Your words help the underground find us — would you drop a quick review? 🖤
+    </p>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:rgba(240,237,232,0.86);">
+      <strong style="color:#d2ae5b;">Got a photo in it?</strong> Reply to this email with a shot of you wearing it and we'll feature you on the
+      <a href="https://www.kryptaa.com/reviews.html" style="color:#d2ae5b;">Real People, Real Fits</a> wall — the first thing every visitor sees on our reviews page.
+      Mirror selfies count. Street shots count more.
     </p>
     <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:rgba(240,237,232,0.86);">
-      It takes 30 seconds and means the world to a small brand like ours.
+      Takes 30 seconds and means the world to a small brand like ours.
     </p>
     <a href="https://www.kryptaa.com/reviews.html" style="display:inline-block;background:#d2ae5b;color:#060606;text-decoration:none;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700;padding:14px 28px;">Write a Review</a>
     <p style="margin:28px 0 0;font-size:11px;line-height:1.6;color:rgba(240,237,232,0.4);">
-      Defined By Power / Driven By Aura<br>
+      Statement without noise.<br>
       If you'd rather not hear from us, just ignore this email — it's a one-time note.
     </p>
   </div>
@@ -98,7 +103,7 @@ exports.handler = async function () {
       await transporter.sendMail({
         from: `KRYPTAA <${process.env.GMAIL_USER}>`,
         to: rec.email,
-        subject: 'How’s your KRYPTAA fit? ✨',
+        subject: 'How’s your KRYPTAA fit? Send us a photo 📸',
         html: emailHtml(rec.name, rec.product),
       });
       rec.sent = true;
