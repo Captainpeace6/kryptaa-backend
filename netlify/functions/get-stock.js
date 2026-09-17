@@ -22,10 +22,10 @@ const BASE_STOCK = {
   30:  { S: 5,  M: 10, L: 10, XL: 5  },
   31:  { S: 5,  M: 8,  L: 11, XL: 6  },
   32:  { S: 5,  M: 10, L: 10, XL: 5  },
-  500: { XS: 9,  S: 12, M: 12, L: 12, XL: 0 },
-  501: { XS: 9,  S: 15, M: 13, L: 11, XL: 0 },
-  502: { XS: 7,  S: 12, M: 12, L: 11, XL: 0 },
-  503: { XS: 12, S: 12, M: 9,  L: 7,  XL: 0 },
+  500: { XS: 9,  S: 12, M: 12, L: 12 },
+  501: { XS: 9,  S: 15, M: 13, L: 11 },
+  502: { XS: 7,  S: 12, M: 12, L: 11 },
+  503: { XS: 12, S: 12, M: 9,  L: 7 },
   // Silver Metallic Crop Set (id 90) — Top & Skirt tracked separately (Universal size)
   '90:top':   { Universal: 12 },
   '90:skirt': { Universal: 12 },
@@ -40,6 +40,8 @@ exports.handler = async function (event) {
     const store = blobStore('kryptaa-stock');
     const raw = await store.get('stock');
     const stock = raw ? JSON.parse(raw) : BASE_STOCK;
+    // BASE_STOCK is the size schema: drop any stored size a product no longer carries (e.g. track-pant XL)
+    Object.keys(stock).forEach((id) => { if (BASE_STOCK[id] && stock[id] && typeof stock[id] === 'object') Object.keys(stock[id]).forEach((sz) => { if (!(sz in BASE_STOCK[id])) delete stock[id][sz]; }); });
     return {
       statusCode: 200,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
