@@ -135,6 +135,8 @@ exports.handler = async function () {
       row('Added to cart', (f1.add_to_cart || 0), (f7.add_to_cart || 0) + ' · 7d'),
       row('Checkout started', (f1.begin_checkout || 0), (f7.begin_checkout || 0) + ' · 7d'),
       row('Purchased (GA4)', (f1.purchase || 0), (f7.purchase || 0) + ' · 7d'),
+      (function () { const m = ((ga7.mediums || []).find((x) => x.medium === 'meta_one')) || { sessions: 0, addToCarts: 0, purchases: 0, revenue: 0 };
+        return row('Meta One links · 7d', m.sessions + ' sessions', m.addToCarts + ' carts · ' + m.purchases + ' orders' + (m.revenue ? ' · $' + m.revenue.toFixed(2) : '')); })(),
     ].join('') : row('GA4', 'unavailable'))}
 
     ${section('Automations', [

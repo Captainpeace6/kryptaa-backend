@@ -180,6 +180,18 @@ exports.handler = async function (event) {
     audience.countries = await dim('country', 'sessions', 8);
     audience.newVsReturning = await dim('newVsReturning', 'totalUsers', 3);
 
+    // UTM medium breakdown (e.g. meta_one links inside IG reels/posts) — sessions + purchases
+    let mediums = [];
+    try {
+      const [mr] = await client.runReport({
+        property, dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [{ name: 'sessionMedium' }],
+        metrics: [{ name: 'sessions' }, { name: 'addToCarts' }, { name: 'ecommercePurchases' }, { name: 'totalRevenue' }],
+        orderBys: [{ metric: { metricName: 'sessions' }, desc: true }], limit: 20,
+      });
+      mediums = (mr.rows || []).map((r) => ({ medium: r.dimensionValues[0].value, sessions: +r.metricValues[0].value || 0, addToCarts: +r.metricValues[1].value || 0, purchases: +r.metricValues[2].value || 0, revenue: +r.metricValues[3].value || 0 }));
+    } catch (e) { /* optional */ }
+
     return json(200, {
       configured: true,
       rangeDays,
@@ -190,6 +202,7 @@ exports.handler = async function (event) {
       pages,
       items,
       audience,
+      mediums,
       updatedAt: Date.now(),
     });
   } catch (e) {
