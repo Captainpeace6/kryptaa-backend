@@ -41,7 +41,13 @@ exports.handler = async function (event) {
 
   // ── Blobs cache (6h) — protects the 10 calls/day API limit ──
   let store = null;
-  try { const { getStore } = require('@netlify/blobs'); store = getStore('clarity-cache'); } catch (e) { /* blobs optional */ }
+  try {
+    const { getStore } = require('@netlify/blobs');
+    // Netlify does not inject the Blobs context on this site — pass siteID/token explicitly (same as the other functions)
+    const siteID = process.env.SITE_ID || process.env.NETLIFY_SITE_ID;
+    const btoken = process.env.NETLIFY_API_TOKEN || process.env.NETLIFY_BLOBS_TOKEN;
+    store = siteID && btoken ? getStore({ name: 'clarity-cache', siteID, token: btoken }) : getStore('clarity-cache');
+  } catch (e) { /* blobs optional */ }
   const CACHE_MS = 6 * 3600 * 1000;
   if (store && !force) {
     try {
@@ -66,6 +72,7 @@ exports.handler = async function (event) {
       let msg = 'HTTP ' + res.status;
       try { const j = JSON.parse(text); msg = j.message || j.error || msg; } catch (e) {}
       if (res.status === 401 || res.status === 403) return json(200, { configured: false, reason: 'Clarity auth failed — check CLARITY_API_TOKEN (' + msg + ')', projectId });
+      if (res.status === 429) return json(200, { configured: true, rateLimited: true, reason: 'Clarity API daily limit reached (10 calls/day) — data resumes after midnight UTC', projectId });
       return json(200, { configured: false, reason: 'Clarity API error: ' + msg, projectId });
     }
     raw = JSON.parse(text);
