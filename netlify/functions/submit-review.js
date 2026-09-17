@@ -119,7 +119,7 @@ exports.handler = async function (event) {
     });
     await transporter.sendMail({
       from: `KRYPTAA Reviews <${process.env.GMAIL_USER}>`,
-      to: process.env.NOTIFY_EMAIL || 'kryptaa.official@gmail.com',
+      to: process.env.NOTIFY_EMAIL || 'hello@kryptaa.com',
       subject: `New Review ${stars} — ${product} — ${name}`,
       html,
       attachments,

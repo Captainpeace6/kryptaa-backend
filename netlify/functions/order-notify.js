@@ -115,7 +115,7 @@ exports.handler = async function (event) {
   try {
     await transporter.sendMail({
       from: `KRYPTAA Orders <${process.env.GMAIL_USER}>`,
-      to: process.env.NOTIFY_EMAIL || 'kryptaa.official@gmail.com',
+      to: process.env.NOTIFY_EMAIL || 'hello@kryptaa.com',
       subject: `New Order $${total} — ${customer.name || 'Customer'} — ${new Date().toLocaleDateString('en-IN')}`,
       html,
     });
