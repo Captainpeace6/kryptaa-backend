@@ -44,7 +44,7 @@ exports.handler = async function (event) {
     Object.keys(stock).forEach((id) => { if (BASE_STOCK[id] && stock[id] && typeof stock[id] === 'object') Object.keys(stock[id]).forEach((sz) => { if (!(sz in BASE_STOCK[id])) delete stock[id][sz]; }); });
     return {
       statusCode: 200,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, s-maxage=60', 'Netlify-CDN-Cache-Control': 'public, s-maxage=60' },
       body: JSON.stringify({ stock }),
     };
   } catch (err) {
