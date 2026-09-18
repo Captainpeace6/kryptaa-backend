@@ -14,7 +14,15 @@
    ───────────────────────────────────────────────────────────── */
 const nodemailer = require('nodemailer');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { blobStore, waitlistCounts } = require('./restock-lib');
+/* Sales data (stock, waitlist, cart recovery, reviews) now lives in the Cloudflare Worker (K_API).
+   The pulse reads it over HTTP as the admin; Netlify keeps only reporting. */
+const K_API = process.env.K_API_URL || 'https://kryptaa-api.kryptaa.workers.dev/';
+async function callWorker(path) {
+  try {
+    const r = await fetch(K_API + path, { headers: { 'X-Admin-Key': process.env.ADMIN_KEY } });
+    return r.ok ? await r.json() : null;
+  } catch (e) { console.error('pulse: worker ' + path + ' failed:', e.message); return null; }
+}
 const { CATALOG } = require('./catalog');
 
 const DAY = 24 * 3600 * 1000;
@@ -47,29 +55,12 @@ async function stripeStats() {
   return out;
 }
 
-async function recoveryStats() {
-  const out = { sent24h: 0, sent7d: 0, ok: false };
-  try {
-    const store = blobStore('kryptaa-cart-recovery');
-    const listing = await store.list({ prefix: 'sent:' });
-    const now = Date.now();
-    for (const b of (listing && listing.blobs) || []) {
-      const ts = Number(await store.get(b.key)) || 0;
-      if (now - ts < DAY) out.sent24h++;
-      if (now - ts < 7 * DAY) out.sent7d++;
-    }
-    out.ok = true;
-  } catch (e) { out.error = e.message; }
+async function recoveryStats(summary) {
+  const out = { sent24h: null, sent7d: null, sentTotal: summary ? summary.recoveryEmailsSent : null, ok: !!summary };
   return out;
 }
 
-async function blobsHealth() {
-  try {
-    const store = blobStore('kryptaa-cart-recovery');
-    await store.set('pulse:health', String(Date.now()));
-    return 'OK';
-  } catch (e) { return 'FAILING — ' + e.message; }
-}
+async function blobsHealth(summary) { return summary ? 'OK (Cloudflare KV)' : 'FAILING — worker unreachable'; }
 
 function stockSummary(stockRes) {
   if (!stockRes || !stockRes.alerts) return null;
@@ -90,16 +81,17 @@ exports.handler = async function () {
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return { statusCode: 200, body: 'mail not configured' };
   const to = process.env.NOTIFY_EMAIL || process.env.GMAIL_USER;
 
-  const [st, ga1, ga7, gsc, stock, rec, wait, blobs] = await Promise.all([
+  const [st, ga1, ga7, gsc, stock, summary] = await Promise.all([
     stripeStats(),
     callAdmin('ga4-report', { range: '1' }),
     callAdmin('ga4-report', { range: '7' }),
     callAdmin('gsc-report'),
-    callAdmin('low-stock-alert'),
-    recoveryStats(),
-    waitlistCounts().catch(() => ({})),
-    blobsHealth(),
+    callWorker('low-stock-alert'),
+    callWorker('admin-summary'),
   ]);
+  const rec = await recoveryStats(summary);
+  const wait = (summary && summary.waitlist) || {};
+  const blobs = await blobsHealth(summary);
 
   const f1 = (ga1 && ga1.funnel) || {}; const f7 = (ga7 && ga7.funnel) || {};
   const gaOk = ga1 && ga1.configured !== false;
@@ -140,7 +132,8 @@ exports.handler = async function () {
     ].join('') : row('GA4', 'unavailable'))}
 
     ${section('Automations', [
-      row('Abandoned-cart emails sent', rec.ok ? rec.sent24h : 'unavailable', rec.ok ? rec.sent7d + ' · 7d' : ''),
+      row('Abandoned-cart emails sent', rec.ok ? rec.sentTotal + ' total' : 'unavailable', ''),
+      row('Reviews awaiting moderation', summary ? summary.pendingReviews : 'unavailable', summary && summary.pendingReviews ? 'approve in dashboard → Customers' : ''),
       row('Back-in-stock waitlist', waitTotal + ' waiting', Object.keys(wait || {}).map((id) => (CATALOG[id] ? CATALOG[id].name : id) + ' ×' + wait[id]).join(', ')),
     ].join(''))}
 
