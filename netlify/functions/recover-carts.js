@@ -51,18 +51,13 @@ function recoveryHtml(first, lines, url) {
   </div></body></html>`;
 }
 
-exports.handler = async function (event) {
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
-  const adminKey = event.headers['x-admin-key'];
-  if (!adminKey || adminKey !== process.env.ADMIN_KEY) return json(401, { error: 'Unauthorized' });
-  if (!process.env.STRIPE_SECRET_KEY) return json(500, { error: 'Stripe not configured' });
-
+/* Core: scan and optionally send. Shared by the admin endpoint and the daily cron. */
+async function run({ days = 45, send = false, ids = null } = {}) {
+  if (!process.env.STRIPE_SECRET_KEY) return { error: 'Stripe not configured' };
   const stripe = stripeLib(process.env.STRIPE_SECRET_KEY);
-  const qs = event.queryStringParameters || {};
-  let body = {}; try { body = JSON.parse(event.body || '{}'); } catch (e) {}
-  const days = Math.min(120, Math.max(1, parseInt(qs.days || body.days || '45', 10) || 45));
-  const doSend = event.httpMethod === 'POST' && body.send === true;
-  const onlyIds = Array.isArray(body.ids) && body.ids.length ? new Set(body.ids) : null;
+  days = Math.min(120, Math.max(1, parseInt(days, 10) || 45));
+  const doSend = send === true;
+  const onlyIds = Array.isArray(ids) && ids.length ? new Set(ids) : null;
   const since = Math.floor(Date.now() / 1000) - days * 86400;
 
   /* Every checkout session in the window */
@@ -111,11 +106,9 @@ exports.handler = async function (event) {
   }
 
   const eligible = rows.filter((r) => r.eligible && (!onlyIds || onlyIds.has(r.id)));
-  if (!doSend) {
-    return json(200, { scannedDays: days, sessions: sessions.length, eligible: eligible.length, rows });
-  }
+  if (!doSend) return { scannedDays: days, sessions: sessions.length, eligible: eligible.length, rows };
 
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return json(500, { error: 'mail not configured' });
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return { error: 'mail not configured' };
   const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD } });
 
   /* Make sure the code in the email actually exists in Stripe */
@@ -143,5 +136,22 @@ exports.handler = async function (event) {
       failed.push({ id: r.id, email: r.email, error: e.message });
     }
   }
-  return json(200, { sentCount: sent.length, sent, failedCount: failed.length, failed });
+  return { scannedDays: days, sentCount: sent.length, sent, failedCount: failed.length, failed };
+}
+
+/* Admin endpoint: GET lists, POST {send:true} sends. */
+exports.handler = async function (event) {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
+  const adminKey = (event.headers || {})['x-admin-key'];
+  if (!adminKey || adminKey !== process.env.ADMIN_KEY) return json(401, { error: 'Unauthorized' });
+  const qs = event.queryStringParameters || {};
+  let body = {}; try { body = JSON.parse(event.body || '{}'); } catch (e) {}
+  const out = await run({
+    days: qs.days || body.days || 45,
+    send: event.httpMethod === 'POST' && body.send === true,
+    ids: body.ids,
+  });
+  return json(out.error ? 500 : 200, out);
 };
+
+exports.run = run;

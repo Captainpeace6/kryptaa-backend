@@ -15,3 +15,7 @@
 # Daily business pulse email — 12:00 UTC = 08:00 America/New_York
 [functions."daily-pulse"]
   schedule = "0 12 * * *"
+
+# Abandoned-cart recovery — 13:00 UTC = 09:00 America/New_York, an hour after the pulse
+[functions."recover-carts-daily"]
+  schedule = "0 13 * * *"
