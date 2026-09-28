@@ -99,6 +99,7 @@ exports.handler = async function (event) {
       hasRecoveryUrl: !!url,
     };
     if (!email) { row.skip = 'no email captured'; rows.push(row); continue; }
+    if (/@kryptaa\.com$/i.test(email) || /^(capi|checkout)-test@/i.test(email)) { row.skip = 'internal test session'; rows.push(row); continue; }
     if (buyerEmails.has(email)) { row.skip = 'this person completed an order'; rows.push(row); continue; }
     if (seenEmail.has(email)) { row.skip = 'newer abandoned cart for the same email'; rows.push(row); continue; }
     if (await alreadySent(s.id)) { row.skip = 'already emailed'; rows.push(row); continue; }
