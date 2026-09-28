@@ -6,8 +6,13 @@ const nodemailer = require('nodemailer');
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
+  /* Accept the env var whatever case it was created in (MAIL_SECRET / Mail_Secret). */
+  const expected = (function () {
+    for (const k of Object.keys(process.env)) if (k.toLowerCase() === 'mail_secret') return process.env[k];
+    return null;
+  })();
   const secret = event.headers['x-mail-secret'];
-  if (!secret || !process.env.MAIL_SECRET || secret !== process.env.MAIL_SECRET) return { statusCode: 401, body: 'Unauthorized' };
+  if (!secret || !expected || secret !== expected) return { statusCode: 401, body: 'Unauthorized' };
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return { statusCode: 500, body: 'mail not configured' };
 
   let body; try { body = JSON.parse(event.body || '{}'); } catch (e) { return { statusCode: 400, body: 'Invalid JSON' }; }
